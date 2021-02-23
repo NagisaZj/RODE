@@ -10,6 +10,7 @@ class QMixer(nn.Module):
 
         self.args = args
         self.n_agents = args.n_agents
+        self.max_n_agents = args.env_args['max_n_agents']
         self.state_dim = int(np.prod(args.state_shape))
 
         self.embed_dim = args.mixing_embed_dim

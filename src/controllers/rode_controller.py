@@ -29,7 +29,6 @@ class RODEMAC:
         self.action_encoder = action_encoder_REGISTRY[args.action_encoder](args)
 
         self.hidden_states = None
-        self.role_hidden_states = None
         self.selected_roles = None
         self.n_clusters = args.n_role_clusters
         self.role_action_spaces = th.ones(self.n_roles, self.n_actions).to(args.device)
@@ -57,10 +56,9 @@ class RODEMAC:
         agent_inputs = self._build_inputs(ep_batch, t)
 
         # select roles
-        self.role_hidden_states = self.role_agent(agent_inputs, self.role_hidden_states)
         role_outputs = None
         if t % self.role_interval == 0:
-            role_outputs = self.role_selector(self.role_hidden_states, self.role_latent)
+            role_outputs = self.role_selector(agent_inputs, self.role_latent)
             self.selected_roles = self.role_selector.select_role(role_outputs, test_mode=test_mode, t_env=t_env).squeeze()
             # [bs * n_agents]
 
@@ -79,11 +77,9 @@ class RODEMAC:
 
     def init_hidden(self, batch_size):
         self.hidden_states = self.agent.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
-        self.role_hidden_states = self.role_agent.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
 
     def parameters(self):
         params = list(self.agent.parameters())
-        params += list(self.role_agent.parameters())
         for role_i in range(self.n_roles):
             params += list(self.roles[role_i].parameters())
         params += list(self.role_selector.parameters())
@@ -92,7 +88,6 @@ class RODEMAC:
 
     def load_state(self, other_mac):
         self.agent.load_state_dict(other_mac.agent.state_dict())
-        self.role_agent.load_state_dict(other_mac.role_agent.state_dict())
         if other_mac.n_roles > self.n_roles:
             self.n_roles = other_mac.n_roles
             self.roles = copy.deepcopy(other_mac.roles)
@@ -108,7 +103,6 @@ class RODEMAC:
 
     def cuda(self):
         self.agent.cuda()
-        self.role_agent.cuda()
         for role_i in range(self.n_roles):
             self.roles[role_i].cuda()
         self.role_selector.cuda()
@@ -116,7 +110,6 @@ class RODEMAC:
 
     def save_models(self, path):
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))
-        th.save(self.role_agent.state_dict(), "{}/role_agent.th".format(path))
         for role_i in range(self.n_roles):
             th.save(self.roles[role_i].state_dict(), "{}/role_{}.th".format(path, role_i))
         th.save(self.role_selector.state_dict(), "{}/role_selector.th".format(path))
@@ -129,9 +122,9 @@ class RODEMAC:
     def load_models(self, path):
         self.role_action_spaces = th.load("{}/role_action_spaces.pt".format(path),
                                           map_location=lambda storage, loc: storage).to(self.args.device)
+        self.role_action_spaces = th.cat((self.role_action_spaces, self.role_action_spaces[:, -2:]), 1)
         self.n_roles = self.role_action_spaces.shape[0]
         self.agent.load_state_dict(th.load("{}/agent.th".format(path), map_location=lambda storage, loc: storage))
-        self.role_agent.load_state_dict(th.load("{}/role_agent.th".format(path), map_location=lambda storage, loc: storage))
         for role_i in range(self.n_roles):
             try:
                 self.roles[role_i].load_state_dict(th.load("{}/role_{}.th".format(path, role_i),
@@ -144,16 +137,18 @@ class RODEMAC:
         self.role_selector.load_state_dict(th.load("{}/role_selector.th".format(path),
                                            map_location=lambda storage, loc: storage))
 
-        self.action_encoder.load_state_dict(th.load("{}/action_encoder.th".format(path),
-                                                    map_location=lambda storage, loc:storage))
+        #self.action_encoder.load_state_dict(th.load("{}/action_encoder.th".format(path),
+        #                                            map_location=lambda storage, loc:storage))
         self.role_latent = th.load("{}/role_latent.pt".format(path),
                                    map_location=lambda storage, loc: storage).to(self.args.device)
         self.action_repr = th.load("{}/action_repr.pt".format(path),
                                    map_location=lambda storage, loc: storage).to(self.args.device)
+        print(self.action_repr.shape)
+        self.action_repr = th.cat((self.action_repr,self.action_repr[-2:,:]),0)
+        print(self.action_repr.shape)
 
     def _build_agents(self, input_shape):
         self.agent = agent_REGISTRY[self.args.agent](input_shape, self.args)
-        self.role_agent = agent_REGISTRY[self.args.agent](input_shape, self.args)
 
     def _build_roles(self):
         self.roles = [role_REGISTRY[self.args.role](self.args) for _ in range(self.n_roles)]

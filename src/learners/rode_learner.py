@@ -277,10 +277,12 @@ class RODELearner:
         # Not quite right but I don't want to save target networks
         self.target_mac.load_models(path)
         if self.mixer is not None:
-            self.mixer.load_state_dict(th.load("{}/mixer.th".format(path), map_location=lambda storage, loc: storage))
+            if not self.args.save_replay:
+                self.mixer.load_state_dict(th.load("{}/mixer.th".format(path), map_location=lambda storage, loc: storage))
         if self.role_mixer is not None:
-            self.role_mixer.load_state_dict(
-                th.load("{}/role_mixer.th".format(path), map_location=lambda storage, loc: storage))
+            if not self.args.save_replay:
+                self.role_mixer.load_state_dict(
+                    th.load("{}/role_mixer.th".format(path), map_location=lambda storage, loc: storage))
         self.optimiser.load_state_dict(th.load("{}/opt.th".format(path), map_location=lambda storage, loc: storage))
         self.action_encoder_optimiser.load_state_dict(th.load("{}/action_repr_opt.th".format(path),
                                                               map_location=lambda storage, loc: storage))

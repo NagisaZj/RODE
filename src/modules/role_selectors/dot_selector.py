@@ -18,8 +18,8 @@ class DotSelector(nn.Module):
         self.epsilon_start_t = 0
         self.epsilon_reset = True
 
-        self.fc1 = nn.Linear(args.rnn_hidden_dim, 2 * args.rnn_hidden_dim)
-        self.fc2 = nn.Linear(2 * args.rnn_hidden_dim, args.action_latent_dim)
+        self.fc1 = nn.Linear(input_shape, args.rnn_hidden_dim)
+        self.fc2 = nn.Linear(args.rnn_hidden_dim, args.action_latent_dim)
 
         self.epsilon = 0.05
 
